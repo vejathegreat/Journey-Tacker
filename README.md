@@ -10,12 +10,14 @@ This document describes the **engineering approach**, **architecture**, **local 
 
 1. [Approach](#approach)
 2. [Architecture](#architecture)
-3. [The virtual GPS problem](#the-virtual-gps-problem)
-4. [Setup](#setup)
-5. [API key configuration](#api-key-configuration)
-6. [Trade-offs](#trade-offs)
-7. [TfL endpoints used](#tfl-endpoints-used)
-8. [Tech stack](#tech-stack)
+3. [Modules](#modules)
+4. [Libraries & dependencies](#libraries--dependencies)
+5. [The virtual GPS problem](#the-virtual-gps-problem)
+6. [Setup](#setup)
+7. [API key configuration](#api-key-configuration)
+8. [Trade-offs](#trade-offs)
+9. [TfL endpoints used](#tfl-endpoints-used)
+10. [Tech stack](#tech-stack)
 
 ---
 
@@ -129,6 +131,99 @@ When the user navigates away from the tracking screen, `SharingStarted.WhileSubs
 - `NetworkModule` — OkHttp, Retrofit, `TflApi`
 - `DataModule` — repository bindings
 - `AppModule` — `@TflAppKey` from `BuildConfig.TFL_APP_KEY`
+
+---
+
+## Modules
+
+Eight Gradle modules. Dependency direction flows **inward** (features → data → network/model → common).
+
+| Module | Type | Namespace / package | Depends on |
+|--------|------|---------------------|------------|
+| `:app` | Application | `com.velaphi.journeytracker` | `:core:designsystem`, `:core:data`, `:core:network`, `:feature:journey`, `:feature:tracking` |
+| `:core:common` | JVM library | `com.velaphi.journeytracker.core.common` | — |
+| `:core:model` | JVM library | `com.velaphi.journeytracker.core.model` | `:core:common` |
+| `:core:network` | Android library | `com.velaphi.journeytracker.core.network` | `:core:model` |
+| `:core:data` | Android library | `com.velaphi.journeytracker.core.data` | `:core:common`, `:core:model`, `:core:network` |
+| `:core:designsystem` | Android library | `com.velaphi.journeytracker.core.designsystem` | — (Compose theme only) |
+| `:feature:journey` | Android library | `com.velaphi.journeytracker.feature.journey` | `:core:common`, `:core:model`, `:core:data`, `:core:designsystem` |
+| `:feature:tracking` | Android library | `com.velaphi.journeytracker.feature.tracking` | `:core:common`, `:core:model`, `:core:data`, `:core:designsystem` |
+
+### Module roles (summary)
+
+- **`:app`** — `Application`, `MainActivity`, `JourneyTrackerNavHost`, Hilt root, API keys via `BuildConfig` / manifest placeholders.
+- **`:core:common`** — `DispatcherProvider` (IO / Main).
+- **`:core:model`** — Domain models, `JourneyRepository` / `TrackingRepository` interfaces.
+- **`:core:network`** — Retrofit `TflApi`, DTOs, `NetworkModule`, HTTP error mapping.
+- **`:core:data`** — Repository implementations, mappers, virtual GPS join, `DataModule`.
+- **`:core:designsystem`** — Material 3 colours, typography, `Theme.kt`.
+- **`:feature:journey`** — Journey planning screen + `JourneyViewModel`.
+- **`:feature:tracking`** — Live map + telematics screen + `TrackingViewModel`.
+
+---
+
+## Libraries & dependencies
+
+Versions are centralized in [`gradle/libs.versions.toml`](gradle/libs.versions.toml). Below is the **complete** third-party dependency set (plus which module declares each).
+
+### Build tooling (plugins)
+
+| Plugin | Version |
+|--------|---------|
+| Android Gradle Plugin | 8.9.2 |
+| Kotlin | 2.0.21 |
+| KSP | 2.0.21-1.0.28 |
+| Hilt Gradle Plugin | 2.56.2 |
+| Kotlin Compose Compiler | 2.0.21 |
+| Kotlin Serialization | 2.0.21 |
+
+### Runtime libraries (by category)
+
+| Library | Version | Used in |
+|---------|---------|---------|
+| **AndroidX Core KTX** | 1.18.0 | `:app`, `:feature:journey`, `:feature:tracking` |
+| **Activity Compose** | 1.13.0 | `:app` |
+| **Lifecycle Runtime KTX** | 2.10.0 | `:app`, `:feature:journey`, `:feature:tracking` |
+| **Lifecycle Runtime Compose** | 2.10.0 | `:feature:journey`, `:feature:tracking` |
+| **Lifecycle ViewModel KTX** | 2.10.0 | `:feature:journey`, `:feature:tracking` |
+| **Lifecycle ViewModel Compose** | 2.10.0 | `:feature:journey`, `:feature:tracking` |
+| **Navigation Compose** | 2.9.0 | `:app`, `:feature:journey`, `:feature:tracking` |
+| **Compose BOM** | 2024.09.00 | `:app`, `:core:designsystem`, `:feature:journey`, `:feature:tracking` |
+| **Compose UI** | (BOM) | `:app`, `:core:designsystem`, `:feature:journey`, `:feature:tracking` |
+| **Compose UI Graphics** | (BOM) | `:core:designsystem` |
+| **Compose Material 3** | (BOM) | `:app`, `:core:designsystem`, `:feature:journey`, `:feature:tracking` |
+| **Compose Material Icons Extended** | (BOM) | `:feature:tracking` |
+| **Compose UI Tooling** | (BOM) | `:app`, `:core:designsystem` (debug) |
+| **Compose UI Tooling Preview** | (BOM) | `:core:designsystem` |
+| **Hilt Android** | 2.56.2 | `:app`, `:core:network`, `:core:data`, `:feature:journey`, `:feature:tracking` |
+| **Hilt Compiler (KSP)** | 2.56.2 | same as Hilt (ksp) |
+| **Hilt Navigation Compose** | 1.2.0 | `:feature:journey`, `:feature:tracking` |
+| **Kotlinx Coroutines Core** | 1.10.2 | `:core:common`, `:core:model` |
+| **Kotlinx Coroutines Android** | 1.10.2 | `:core:network`, `:core:data` |
+| **Kotlinx Serialization JSON** | 1.8.0 | `:core:network` |
+| **Retrofit** | 2.11.0 | `:core:network` |
+| **Retrofit Kotlinx Serialization Converter** | 1.0.0 | `:core:network` |
+| **OkHttp** | 4.12.0 | `:core:network` |
+| **OkHttp Logging Interceptor** | 4.12.0 | `:core:network` |
+| **Maps Compose** | 6.4.1 | `:feature:tracking` |
+| **Play Services Maps** | 19.2.0 | `:feature:tracking` |
+
+### Test / debug only
+
+| Library | Version | Used in |
+|---------|---------|---------|
+| JUnit | 4.13.2 | `:app` (unit tests) |
+| AndroidX JUnit | 1.3.0 | `:app` (instrumented) |
+| Espresso Core | 3.7.0 | `:app` (instrumented) |
+| Compose UI Test JUnit4 | (BOM) | `:app` (instrumented) |
+| Compose UI Test Manifest | (BOM) | `:app` (debug) |
+
+### External services (not Gradle artifacts)
+
+| Service | Configuration |
+|---------|----------------|
+| TfL Unified API | `TFL_APP_KEY` in `local.properties` → `BuildConfig` |
+| Google Maps SDK for Android | `MAPS_SDK_KEY` in `local.properties` → manifest `com.google.android.geo.API_KEY` |
 
 ---
 
